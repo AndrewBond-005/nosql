@@ -2,6 +2,7 @@ package ru.library.event.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import ru.library.event.model.Event;
 import ru.library.event.model.Manager;
@@ -9,6 +10,7 @@ import ru.library.event.service.EventService;
 import ru.library.event.service.ManagerService;
 
 @Component
+@Profile("inmemory")
 public class DataInitializer implements CommandLineRunner {
 
     private final EventService eventService;
