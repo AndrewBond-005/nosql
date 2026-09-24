@@ -24,8 +24,9 @@ public class TemporaryRequestController {
     public ResponseEntity<TemporaryRequest> createTemporaryRequest(
             @RequestParam String eventId,
             @RequestParam String userId,
-            @RequestParam(defaultValue = "reservation") String purpose) {
-        TemporaryRequest request = orderService.createTemporaryRequest(eventId, userId, purpose);
+            @RequestParam(defaultValue = "reservation") String purpose,
+            @RequestParam(defaultValue = "300") long ttlSeconds) {
+        TemporaryRequest request = orderService.createTemporaryRequest(eventId, userId, purpose, ttlSeconds);
         return ResponseEntity.ok(request);
     }
 

@@ -1,5 +1,7 @@
 package ru.library.event.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -26,6 +28,7 @@ public class TemporaryRequest {
         this.expiresAt = this.createdAt.plusSeconds(ttlSeconds);
     }
 
+    @JsonIgnore
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(this.expiresAt);
     }

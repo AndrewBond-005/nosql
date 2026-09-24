@@ -1,4 +1,4 @@
-mvn pac<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -55,6 +55,7 @@ mvn pac<!DOCTYPE html>
     <nav>
         <button class="active" onclick="showSection('events', this)">События</button>
         <button onclick="showSection('orders', this)">Заказы</button>
+        <button onclick="showSection('temp', this)">Временные заявки</button>
         <button onclick="showSection('managers', this)">Менеджеры</button>
         <button onclick="showSection('settings', this)">Настройки</button>
     </nav>
@@ -116,6 +117,44 @@ mvn pac<!DOCTYPE html>
                         </tr>
                     </thead>
                     <tbody id="orders-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TEMP REQUESTS -->
+        <div id="temp" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Временные заявки (Lease TTL)</h2>
+                    <button class="btn btn-primary" onclick="loadTempRequests()">Обновить</button>
+                </div>
+                <div class="form-row" id="temp-form" style="display:none;">
+                    <div class="form-group">
+                        <label>Событие</label>
+                        <select id="temp-event"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>ID пользователя</label>
+                        <input id="temp-user" value="user01" />
+                    </div>
+                    <div class="form-group">
+                        <label>TTL (сек)</label>
+                        <input id="temp-ttl" type="number" value="30" min="5" max="300" />
+                    </div>
+                    <button class="btn btn-success" onclick="createTempRequest()">Создать</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Событие</th>
+                            <th>Пользователь</th>
+                            <th>Цель</th>
+                            <th>Осталось</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="temp-body"></tbody>
                 </table>
             </div>
         </div>
@@ -194,6 +233,7 @@ mvn pac<!DOCTYPE html>
         const API = '';
         let eventsCache = [];
         let managersCache = [];
+        let tempTimer = null;
 
         function showSection(id, btn) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -202,13 +242,15 @@ mvn pac<!DOCTYPE html>
             btn.classList.add('active');
             if (id === 'events') loadEvents();
             if (id === 'orders') loadOrders();
+            if (id === 'temp') loadTempRequests();
             if (id === 'managers') loadManagers();
         }
 
         async function api(url, opts) {
             const res = await fetch(API + url, opts);
             if (!res.ok) throw new Error(res.status);
-            return res.json();
+            const text = await res.text();
+            return text ? JSON.parse(text) : null;
         }
 
         // --- EVENTS ---
@@ -300,6 +342,89 @@ mvn pac<!DOCTYPE html>
             loadOrders();
         }
 
+        // --- TEMP REQUESTS ---
+        let tempExpiredFired = {};
+
+        async function loadTempRequests() {
+            tempExpiredFired = {};
+            if (tempTimer) { clearInterval(tempTimer); tempTimer = null; }
+            const [reqs, evts] = await Promise.all([
+                api('/api/temp-requests'),
+                api('/api/events')
+            ]);
+            eventsCache = evts;
+
+            const sel = document.getElementById('temp-event');
+            sel.innerHTML = evts.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join('');
+            document.getElementById('temp-form').style.display = evts.length ? 'flex' : 'none';
+
+            const tbody = document.getElementById('temp-body');
+            if (!reqs.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Нет временных заявок</td></tr>'; return; }
+
+            const evTitle = id => { const e = evts.find(x => x.id === id); return e ? esc(e.title) : id.slice(0,8); };
+
+            tbody.innerHTML = reqs.map(r => `
+                <tr data-id="${r.id}" data-expires="${r.expiresAt}">
+                    <td><small>${r.id.slice(0,8)}</small></td>
+                    <td>${evTitle(r.eventId)}</td>
+                    <td>${esc(r.userId)}</td>
+                    <td>${esc(r.purpose)}</td>
+                    <td class="ttl-cell"></td>
+                    <td class="actions">
+                        <button class="btn btn-danger btn-sm" onclick="deleteTempRequest('${r.id}')">Удалить</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            updateTtlCells();
+            tempTimer = setInterval(updateTtlCells, 1000);
+        }
+
+        function updateTtlCells() {
+            let anyExpired = false;
+            document.querySelectorAll('#temp-body tr[data-expires]').forEach(row => {
+                const expires = new Date(row.dataset.expires);
+                const now = new Date();
+                const diff = Math.max(0, Math.floor((expires - now) / 1000));
+                const cell = row.querySelector('.ttl-cell');
+                if (diff <= 0) {
+                    cell.textContent = 'Истёк';
+                    cell.style.color = '#e74c3c';
+                    cell.style.fontWeight = '600';
+                    if (!tempExpiredFired[row.dataset.id]) {
+                        tempExpiredFired[row.dataset.id] = true;
+                        anyExpired = true;
+                    }
+                } else {
+                    const m = Math.floor(diff / 60);
+                    const s = diff % 60;
+                    cell.textContent = `${m}:${String(s).padStart(2,'0')}`;
+                    cell.style.color = diff <= 10 ? '#e74c3c' : '#27ae60';
+                    cell.style.fontWeight = diff <= 10 ? '600' : '400';
+                }
+            });
+            if (anyExpired) {
+                if (tempTimer) { clearInterval(tempTimer); tempTimer = null; }
+                loadTempRequests();
+            }
+        }
+
+        async function createTempRequest() {
+            const eventId = document.getElementById('temp-event').value;
+            const userId = document.getElementById('temp-user').value;
+            const ttl = document.getElementById('temp-ttl').value;
+            if (!eventId || !userId) { alert('Заполните все поля'); return; }
+            await api(`/api/temp-requests?eventId=${eventId}&userId=${userId}&purpose=reservation&ttlSeconds=${ttl}`, {
+                method: 'POST'
+            });
+            loadTempRequests();
+        }
+
+        async function deleteTempRequest(id) {
+            await api(`/api/temp-requests/${id}`, { method: 'DELETE' });
+            loadTempRequests();
+        }
+
         // --- MANAGERS ---
         async function loadManagers() {
             managersCache = await api('/api/managers');
@@ -353,7 +478,7 @@ mvn pac<!DOCTYPE html>
                     maxResultsPerPage: parseInt(document.getElementById('set-perpage').value) || 20
                 })
             });
-            alert('Сохранено');
+            loadSettings();
         }
 
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }

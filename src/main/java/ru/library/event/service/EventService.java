@@ -54,7 +54,13 @@ public class EventService {
     }
 
     public long incrementViewCount(String eventId) {
-        return eventRepository.incrementCounter(VIEW_COUNTER_PREFIX + eventId, 1);
+        long count = eventRepository.incrementCounter(VIEW_COUNTER_PREFIX + eventId, 1);
+        Optional<Event> eventOpt = eventRepository.get(EVENT_PREFIX + eventId);
+        eventOpt.ifPresent(event -> {
+            event.setViewCount(count);
+            eventRepository.put(EVENT_PREFIX + eventId, event);
+        });
+        return count;
     }
 
     public long getViewCount(String eventId) {

@@ -78,14 +78,18 @@ public class EtcdKeyValueRepository<T> implements KeyValueRepository<T> {
             byte[] valueBytes = objectMapper.writeValueAsBytes(value);
 
             // Create a lease with the specified TTL.
-            // Etcd automatically deletes all keys bound to this lease when it expires.
             long leaseId = leaseClient.grant(ttlSeconds).get().getID();
 
-            // Put with lease attached — the key is now bound to the lease
+            // Send keepAliveOnce to ensure etcd server starts tracking the lease TTL.
+            // Without this, some etcd configurations may not expire the lease properly.
+            leaseClient.keepAliveOnce(leaseId).get();
+
+            // Put with lease attached — the key is now bound to the lease.
+            // Etcd will automatically delete the key when the lease expires.
             kvClient.put(bs(key), bs(valueBytes),
                     PutOption.newBuilder().withLeaseId(leaseId).build()).get();
 
-            log.debug("Etcd PUT key={} with TTL={}s leaseId={}", key, ttlSeconds, leaseId);
+            log.info("Etcd PUT key={} with TTL={}s leaseId={}", key, ttlSeconds, leaseId);
         } catch (JsonProcessingException e) {
             log.error("Serialization error for key={}", key, e);
             throw new RuntimeException("Serialization error for key: " + key, e);
