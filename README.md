@@ -34,27 +34,52 @@
 ## Структура проекта
 
 ```text
-.
-├── src/
-│   └── main/
-│       ├── java/
-│       │   └── com/
-│       │       └── example/
-│       │           └── library/
-│       │               ├── LibraryApplication.java      # Точка входа Spring Boot
-│       │               ├── config/                      # Конфигурация etcd и бинов
-│       │               ├── controller/                  # REST-контроллеры (events, orders)
-│       │               ├── model/                       # DTO и доменные модели
-│       │               └── service/                     # Бизнес-логика (InMemory / Etcd реализации)
-│       └── resources/
-│           ├── application.properties                   # Общие настройки приложения
-│           ├── application-etcd.properties              # Настройки для etcd профиля
-│           └── application-inmemory.properties          # Настройки для inmemory профиля
-├── docker-compose.yml                                   # Скрипт запуска etcd в Docker
-├── pom.xml                                              # Зависимости Maven (jetcd, awaitility)
-└── README.md                                            # Данная документация
+library-events-service/
+├── docker-compose.yml                      # Etcd 3.5.9, порт 2379
+├── pom.xml                                 # Зависимости: Spring Boot, jetcd 0.8.6, awaitility
+├── README.md
+├── backup.db                               # (создаётся вручную) snapshot etcd
+└── src/
+    ├── main/
+    │   ├── java/
+    │   │   └── com/
+    │   │       └── example/
+    │   │           └── library/
+    │   │               ├── LibraryEventsApplication.java    # Точка входа Spring Boot
+    │   │               ├── config/
+    │   │               │   └── RepositoryConfig.java        # @Profile("etcd"): Client, KV, Lease + репозитории
+    │   │               ├── repository/
+    │   │               │   ├── KeyValueRepository.java      # Интерфейс: put/get/delete/getByPrefix, putWithTtl, incrementCounter
+    │   │               │   ├── EtcdKeyValueRepository.java  # @Profile("etcd"): Реализация через Etcd KV API
+    │   │               │   └── InMemoryKeyValueRepository.java # @Profile("inmemory"): HashMap-версия для тестов
+    │   │               ├── model/
+    │   │               │   ├── Event.java                   # Книга-событие
+    │   │               │   ├── Manager.java                 # Менеджер
+    │   │               │   ├── Order.java                   # Заказ
+    │   │               │   ├── TemporaryRequest.java        # Временная заявка (TTL)
+    │   │               │   └── UserSettings.java            # Настройки пользователя
+    │   │               ├── service/
+    │   │               │   ├── EventService.java            # @Cacheable на чтение событий
+    │   │               │   ├── OrderService.java            # ReentrantLock пер-событие, check-and-decrement, создание заказа
+    │   │               │   └── UserSettingsService.java     # @Cacheable на настройки
+    │   │               ├── controller/
+    │   │               │   ├── EventController.java         # REST /events
+    │   │               │   ├── OrderController.java         # REST /orders
+    │   │               │   └── SettingsController.java      # REST /settings
+    │   │               └── exception/
+    │   │                   ├── EventNotFoundException.java       # 404
+    │   │                   ├── NoAvailableCopiesException.java   # 409
+    │   │                   ├── OrderNotFoundException.java       # 404
+    │   │                   └── GlobalExceptionHandler.java       # @ControllerAdvice
+    │   └── resources/
+    │       └── application.properties       # Профили inmemory/etcd, etcd endpoint, namespace
+    └── test/
+        └── java/
+            └── com/
+                └── example/
+                    └── library/
+                        └── ConcurrentOrderTest.java # JUnit 5 + awaitility: Параллельные заказы + атомарный счётчик
 ```
-
 ---
 
 # Как поднять всё и заставить работать
