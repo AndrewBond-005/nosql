@@ -110,15 +110,13 @@ mvn clean package
 ```
 После успешной сборки появится `target/library-events-service-1.0.0.jar`.
 
-Если сборка пападают — проверь версию JDK и наличие зависимостей в `pom.xml` (jetcd 0.8.6, awaitility).
-
 ### Шаг 2. Поднять etcd
-
+Из корня написать в термминал:
 ```bash
 docker-compose up -d
 ```
 
-Проверить, что контейнер жив:
+Проверить, что контейнер жив(через пару секунд):
 ```bash
 docker ps
 # должен быть контейнер с etcd на порту 2379
@@ -130,11 +128,6 @@ etcdctl endpoint health --endpoints=localhost:2379
 # ожидаемо: localhost:2379 is healthy: successfully committed proposal
 ```
 
-Если `etcdctl` не установлен — можно зайти внутрь контейнера:
-```bash
-docker exec -it <container_name> etcdctl endpoint health
-```
-
 ### Шаг 3. Запустить приложение с профилем etcd
 
 ```bash
@@ -142,8 +135,6 @@ java -jar target/library-events-service-1.0.0.jar \
      --server.port=8081 \
      --spring.profiles.active=etcd
 ```
-
-Проверить лог старта: не должно быть ошибок про `Connection refused` / `UNAVAILABLE` от jetcd. Если есть — etcd не поднялась или указан неверный адрес в `application.properties`.
 
 ### Шаг 4. Проверить, что всё работает end-to-end
 
