@@ -40,6 +40,8 @@ public class Order {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    private LocalDateTime issuedAt;
+
     private LocalDateTime returnedAt;
 
     public Order() {
@@ -76,6 +78,9 @@ public class Order {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public LocalDateTime getIssuedAt() { return issuedAt; }
+    public void setIssuedAt(LocalDateTime issuedAt) { this.issuedAt = issuedAt; }
 
     public LocalDateTime getReturnedAt() { return returnedAt; }
     public void setReturnedAt(LocalDateTime returnedAt) { this.returnedAt = returnedAt; }

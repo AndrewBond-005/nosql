@@ -227,6 +227,7 @@
                             <th>Книга</th>
                             <th>Пользователь</th>
                             <th>Статус</th>
+                            <th>Выдача</th>
                             <th>Возврат</th>
                             <th>Действия</th>
                         </tr>
@@ -642,7 +643,7 @@
             const statusBadge = s => `<span class="badge badge-${s.toLowerCase()}">${ORDER_STATUS_LABELS[s] || s}</span>`;
             const evTitle = id => { const e = evts.find(x => x.id === id); return e ? esc(e.title) : id.slice(0,8); };
 
-            if (!orders.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Событий пока нет</td></tr>'; return; }
+            if (!orders.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">Событий пока нет</td></tr>'; return; }
             const fmt = value => value ? new Date(value).toLocaleString('ru-RU') : '—';
             tbody.innerHTML = orders.map(o => {
                 const mine = !currentUser || o.userId === currentUser.userId;
@@ -652,6 +653,7 @@
                     <td>${evTitle(o.eventId)}</td>
                     <td>${esc(o.userId)}</td>
                     <td>${statusBadge(o.status)}</td>
+                    <td><small>${fmt(o.issuedAt)}</small></td>
                     <td><small>${fmt(o.returnedAt)}</small></td>
                     <td class="actions">
                         ${!mine ? '' : o.status === 'PENDING' ? `
@@ -659,7 +661,6 @@
                             <button class="btn btn-danger btn-sm" onclick="updateOrder('${o.id}','CANCELLED')">Отменить</button>
                         ` : o.status === 'CONFIRMED' ? `
                             <button class="btn btn-primary btn-sm" onclick="returnBook('${o.id}')">Вернуть</button>
-                            <button class="btn btn-danger btn-sm" onclick="updateOrder('${o.id}','CANCELLED')">Отменить</button>
                         ` : ''}
                     </td>
                 </tr>`;
@@ -706,7 +707,6 @@
         }
 
         async function returnBook(id) {
-            if (!confirm('Вернуть книгу? Копия снова появится в каталоге.')) return;
             try {
                 await api(`/api/orders/${id}/return`, { method: 'POST' });
             } catch (error) {

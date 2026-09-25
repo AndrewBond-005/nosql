@@ -74,12 +74,20 @@ public class OrderService {
         if (status == Order.Status.CONFIRMED && order.getStatus() != Order.Status.PENDING) {
             throw new InvalidOrderStateException("Выдать книгу можно только для запрошенного события " + orderId);
         }
+        if (status == Order.Status.CANCELLED && order.getStatus() == Order.Status.CONFIRMED) {
+            throw new InvalidOrderStateException(
+                    "Книга по событию " + orderId + " уже выдана, отменить выдачу нельзя: верните книгу: POST /api/orders/"
+                            + orderId + "/return");
+        }
         if (status == order.getStatus()) {
             return order;
         }
 
         if (status == Order.Status.CANCELLED) {
             eventService.releaseOneCopy(order.getEventId());
+        }
+        if (status == Order.Status.CONFIRMED) {
+            order.setIssuedAt(LocalDateTime.now());
         }
 
         order.setStatus(status);

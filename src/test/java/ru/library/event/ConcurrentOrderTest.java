@@ -269,7 +269,14 @@ class ConcurrentOrderTest {
         mockMvc.perform(put("/api/orders/" + orderId + "/status?status=CONFIRMED")
                         .with(httpBasic("return-user", "secret123")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.issuedAt").isNotEmpty());
+
+        mockMvc.perform(put("/api/orders/" + orderId + "/status?status=CANCELLED")
+                        .with(httpBasic("return-user", "secret123")))
+                .andExpect(status().isConflict());
+
+        assertEquals(0, eventService.getEvent(eventId).orElseThrow().getAvailableCopies());
 
         mockMvc.perform(post("/api/orders/" + orderId + "/return")
                         .with(httpBasic("return-user", "secret123")))
