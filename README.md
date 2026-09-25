@@ -12,6 +12,8 @@
 
 Статусы события: `PENDING` — «Запрошена», `CONFIRMED` — «Выдана», `COMPLETED` — «Возвращена», `CANCELLED` — «Отменена».
 
+Жизненный цикл события: взять книгу → `POST /api/orders` (копия резервируется) → выдать `PUT /api/orders/{id}/status?status=CONFIRMED` → вернуть `POST /api/orders/{id}/return` (копия снова в каталоге). Вернуть можно только выданную книгу и только её владельцу; повторный возврат возвращает `409 Conflict`.
+
 ## Где хранятся данные
 
 | Данные | Хранилище |
@@ -224,6 +226,16 @@ curl -X POST "http://localhost:8081/api/orders" \
 ```
 
 Заказчик и менеджер заказа — всегда текущий авторизованный пользователь, отдельного менеджера выбирать не нужно.
+
+Выдать и вернуть книгу:
+
+```bash
+curl -X PUT "http://localhost:8081/api/orders/ORDER_ID/status?status=CONFIRMED" \
+  -H "Authorization: Basic BASE64_USER01_PASSWORD"
+
+curl -X POST "http://localhost:8081/api/orders/ORDER_ID/return" \
+  -H "Authorization: Basic BASE64_USER01_PASSWORD"
+```
 
 Прочитать и сохранить предпочтительную тему оформления (значения `LIGHT` и `DARK`):
 

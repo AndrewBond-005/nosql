@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -222,6 +223,74 @@ class ConcurrentOrderTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"theme\":\"DARK\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void returnShouldReleaseCopyAndProtectAgainstDoubleReturn() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"return-user\",\"password\":\"secret123\"}"))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"other-user\",\"password\":\"secret123\"}"))
+                .andExpect(status().isCreated());
+
+        Event created = eventService.createEvent(new Event("Return Test Book", "Test", "Author", "Category", 1));
+        String eventId = created.getId();
+
+        MvcResult createdOrder = mockMvc.perform(post("/api/orders")
+                        .with(httpBasic("return-user", "secret123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"eventId\":\"" + eventId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andReturn();
+
+        String orderId = readJson(createdOrder, "id");
+        assertEquals(0, eventService.getEvent(eventId).orElseThrow().getAvailableCopies());
+
+        mockMvc.perform(post("/api/orders/" + orderId + "/return")
+                        .with(httpBasic("return-user", "secret123")))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/orders/" + orderId + "/return")
+                        .with(httpBasic("other-user", "secret123")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/orders/" + orderId + "/return")
+                        .with(httpBasic("return-user", "secret123")))
+                .andExpect(status().isMethodNotAllowed());
+
+        mockMvc.perform(put("/api/orders/" + orderId + "/status?status=COMPLETED")
+                        .with(httpBasic("return-user", "secret123")))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(put("/api/orders/" + orderId + "/status?status=CONFIRMED")
+                        .with(httpBasic("return-user", "secret123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        mockMvc.perform(post("/api/orders/" + orderId + "/return")
+                        .with(httpBasic("return-user", "secret123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.returnedAt").isNotEmpty());
+
+        assertEquals(1, eventService.getEvent(eventId).orElseThrow().getAvailableCopies());
+
+        mockMvc.perform(post("/api/orders/" + orderId + "/return")
+                        .with(httpBasic("return-user", "secret123")))
+                .andExpect(status().isConflict());
+
+        assertEquals(1, eventService.getEvent(eventId).orElseThrow().getAvailableCopies());
+    }
+
+    private static String readJson(MvcResult result, String field) throws Exception {
+        return new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(result.getResponse().getContentAsString())
+                .get(field)
+                .asText();
     }
 
     @Test

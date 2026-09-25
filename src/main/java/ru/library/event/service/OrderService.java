@@ -2,9 +2,11 @@ package ru.library.event.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.library.event.exception.EventNotFoundException;
+import ru.library.event.exception.InvalidOrderStateException;
 import ru.library.event.exception.NoAvailableCopiesException;
 import ru.library.event.exception.OrderNotFoundException;
 import ru.library.event.model.Order;
@@ -58,11 +60,25 @@ public class OrderService {
     }
 
     @Transactional
-    public Order updateOrderStatus(String orderId, Order.Status status) {
-        Order order = orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new OrderNotFoundException(orderId));
+    public Order updateOrderStatus(String orderId, String userId, Order.Status status) {
+        Order order = loadOwnedOrder(orderId, userId);
 
-        if (status == Order.Status.CANCELLED && order.getStatus() != Order.Status.CANCELLED) {
+        if (order.getStatus() == Order.Status.COMPLETED || order.getStatus() == Order.Status.CANCELLED) {
+            throw new InvalidOrderStateException(
+                    "Событие " + orderId + " уже завершено со статусом " + order.getStatus());
+        }
+        if (status == Order.Status.COMPLETED) {
+            throw new InvalidOrderStateException(
+                    "Статус COMPLETED можно установить только возвратом: POST /api/orders/" + orderId + "/return");
+        }
+        if (status == Order.Status.CONFIRMED && order.getStatus() != Order.Status.PENDING) {
+            throw new InvalidOrderStateException("Выдать книгу можно только для запрошенного события " + orderId);
+        }
+        if (status == order.getStatus()) {
+            return order;
+        }
+
+        if (status == Order.Status.CANCELLED) {
             eventService.releaseOneCopy(order.getEventId());
         }
 
@@ -71,6 +87,40 @@ public class OrderService {
         Order updated = orderRepository.save(order);
         log.info("Order status updated: orderId={}, status={}", orderId, status);
         return updated;
+    }
+
+    @Transactional
+    public Order returnBook(String orderId, String userId) {
+        Order order = loadOwnedOrder(orderId, userId);
+
+        if (order.getStatus() == Order.Status.COMPLETED) {
+            throw new InvalidOrderStateException("Книга по событию " + orderId + " уже возвращена");
+        }
+        if (order.getStatus() == Order.Status.CANCELLED) {
+            throw new InvalidOrderStateException(
+                    "Событие " + orderId + " отменено, книга уже возвращена в каталог");
+        }
+        if (order.getStatus() != Order.Status.CONFIRMED) {
+            throw new InvalidOrderStateException(
+                    "Книгу по событию " + orderId + " ещё не выдали: сначала подтвердите выдачу");
+        }
+
+        eventService.releaseOneCopy(order.getEventId());
+        order.setStatus(Order.Status.COMPLETED);
+        order.setReturnedAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
+        Order updated = orderRepository.save(order);
+        log.info("Book returned: orderId={}, eventId={}, userId={}", orderId, order.getEventId(), userId);
+        return updated;
+    }
+
+    private Order loadOwnedOrder(String orderId, String userId) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (!order.getUserId().equals(userId) && !order.getManagerId().equals(userId)) {
+            throw new AccessDeniedException("Order belongs to another user");
+        }
+        return order;
     }
 
     public TemporaryRequest createTemporaryRequest(String eventId, String userId, String purpose, long ttlSeconds) {

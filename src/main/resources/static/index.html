@@ -227,6 +227,7 @@
                             <th>Книга</th>
                             <th>Пользователь</th>
                             <th>Статус</th>
+                            <th>Возврат</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
@@ -641,23 +642,28 @@
             const statusBadge = s => `<span class="badge badge-${s.toLowerCase()}">${ORDER_STATUS_LABELS[s] || s}</span>`;
             const evTitle = id => { const e = evts.find(x => x.id === id); return e ? esc(e.title) : id.slice(0,8); };
 
-            if (!orders.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Событий пока нет</td></tr>'; return; }
-            tbody.innerHTML = orders.map(o => `
+            if (!orders.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Событий пока нет</td></tr>'; return; }
+            const fmt = value => value ? new Date(value).toLocaleString('ru-RU') : '—';
+            tbody.innerHTML = orders.map(o => {
+                const mine = !currentUser || o.userId === currentUser.userId;
+                return `
                 <tr>
                     <td><small>${o.id.slice(0,8)}</small></td>
                     <td>${evTitle(o.eventId)}</td>
                     <td>${esc(o.userId)}</td>
                     <td>${statusBadge(o.status)}</td>
+                    <td><small>${fmt(o.returnedAt)}</small></td>
                     <td class="actions">
-                        ${o.status === 'PENDING' ? `
+                        ${!mine ? '' : o.status === 'PENDING' ? `
                             <button class="btn btn-success btn-sm" onclick="updateOrder('${o.id}','CONFIRMED')">Выдать</button>
                             <button class="btn btn-danger btn-sm" onclick="updateOrder('${o.id}','CANCELLED')">Отменить</button>
                         ` : o.status === 'CONFIRMED' ? `
-                            <button class="btn btn-primary btn-sm" onclick="updateOrder('${o.id}','COMPLETED')">Вернуть</button>
+                            <button class="btn btn-primary btn-sm" onclick="returnBook('${o.id}')">Вернуть</button>
+                            <button class="btn btn-danger btn-sm" onclick="updateOrder('${o.id}','CANCELLED')">Отменить</button>
                         ` : ''}
                     </td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
         }
 
         async function createOrder() {
@@ -692,7 +698,23 @@
                 showOrderFormMessage(error.message || 'Не удалось изменить статус события', 'error');
                 return;
             }
-            loadOrders();
+            await loadOrders();
+            showOrderFormMessage(
+                status === 'CONFIRMED' ? 'Книга выдана' : 'Событие отменено, копия вернулась в каталог',
+                'success'
+            );
+        }
+
+        async function returnBook(id) {
+            if (!confirm('Вернуть книгу? Копия снова появится в каталоге.')) return;
+            try {
+                await api(`/api/orders/${id}/return`, { method: 'POST' });
+            } catch (error) {
+                showOrderFormMessage(error.message || 'Не удалось вернуть книгу', 'error');
+                return;
+            }
+            await loadOrders();
+            showOrderFormMessage('Книга возвращена, копия снова в каталоге', 'success');
         }
 
         // --- TEMP REQUESTS ---

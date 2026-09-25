@@ -50,7 +50,13 @@ public class OrderController {
 
     @PutMapping("/{id}/status")
     public ResponseEntity<Order> updateOrderStatus(@PathVariable String id,
-                                                   @RequestParam Order.Status status) {
-        return ResponseEntity.ok(orderService.updateOrderStatus(id, status));
+                                                   @RequestParam Order.Status status,
+                                                   Authentication authentication) {
+        return ResponseEntity.ok(orderService.updateOrderStatus(id, authentication.getName(), status));
+    }
+
+    @PostMapping("/{id}/return")
+    public ResponseEntity<Order> returnBook(@PathVariable String id, Authentication authentication) {
+        return ResponseEntity.ok(orderService.returnBook(id, authentication.getName()));
     }
 }

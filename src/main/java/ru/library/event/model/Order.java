@@ -40,6 +40,8 @@ public class Order {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    private LocalDateTime returnedAt;
+
     public Order() {
         this.id = UUID.randomUUID().toString();
         this.status = Status.PENDING;
@@ -74,4 +76,7 @@ public class Order {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public LocalDateTime getReturnedAt() { return returnedAt; }
+    public void setReturnedAt(LocalDateTime returnedAt) { this.returnedAt = returnedAt; }
 }
