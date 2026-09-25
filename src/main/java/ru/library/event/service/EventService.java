@@ -1,12 +1,13 @@
 package ru.library.event.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import ru.library.event.exception.EventNotFoundException;
 import ru.library.event.model.Event;
-import ru.library.event.repository.KeyValueRepository;
+import ru.library.event.repository.EventRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -14,62 +15,69 @@ import java.util.Optional;
 
 @Service
 public class EventService {
+    private final EventRepository eventRepository;
 
-    private static final String EVENT_PREFIX = "event:";
-    private static final String VIEW_COUNTER_PREFIX = "views:";
-
-    private final KeyValueRepository<Event> eventRepository;
-
-    @Autowired
-    public EventService(KeyValueRepository<Event> eventRepository) {
+    public EventService(EventRepository eventRepository) {
         this.eventRepository = eventRepository;
     }
 
     public Event createEvent(Event event) {
         event.setCreatedAt(LocalDateTime.now());
         event.setUpdatedAt(LocalDateTime.now());
-        eventRepository.put(EVENT_PREFIX + event.getId(), event);
-        return event;
+        return eventRepository.save(event);
     }
 
     @Cacheable(value = "events", key = "#id")
     public Optional<Event> getEvent(String id) {
-        return eventRepository.get(EVENT_PREFIX + id);
+        return eventRepository.findById(id);
     }
 
     public List<Event> getAllEvents() {
-        return eventRepository.getAll(EVENT_PREFIX);
+        return eventRepository.findAll();
     }
 
     @CachePut(value = "events", key = "#event.id")
     public Event updateEvent(Event event) {
         event.setUpdatedAt(LocalDateTime.now());
-        eventRepository.put(EVENT_PREFIX + event.getId(), event);
-        return event;
+        return eventRepository.save(event);
     }
 
     @CacheEvict(value = "events", key = "#id")
     public void deleteEvent(String id) {
-        eventRepository.delete(EVENT_PREFIX + id);
+        eventRepository.deleteById(id);
     }
 
+    @CacheEvict(value = "events", key = "#eventId")
+    @Transactional
     public long incrementViewCount(String eventId) {
-        long count = eventRepository.incrementCounter(VIEW_COUNTER_PREFIX + eventId, 1);
-        Optional<Event> eventOpt = eventRepository.get(EVENT_PREFIX + eventId);
-        eventOpt.ifPresent(event -> {
-            event.setViewCount(count);
-            eventRepository.put(EVENT_PREFIX + eventId, event);
-        });
-        return count;
+        int updated = eventRepository.incrementViewCount(eventId, 1);
+        if (updated == 0) {
+            throw new EventNotFoundException(eventId);
+        }
+        return eventRepository.findById(eventId)
+                .map(Event::getViewCount)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
     }
 
     public long getViewCount(String eventId) {
-        return eventRepository.getCounter(VIEW_COUNTER_PREFIX + eventId);
+        return eventRepository.findById(eventId)
+                .map(Event::getViewCount)
+                .orElse(0L);
+    }
+
+    @CacheEvict(value = "events", key = "#eventId")
+    @Transactional
+    public int reserveOneCopy(String eventId) {
+        return eventRepository.reserveOneCopy(eventId);
+    }
+
+    @CacheEvict(value = "events", key = "#eventId")
+    @Transactional
+    public int releaseOneCopy(String eventId) {
+        return eventRepository.releaseOneCopy(eventId);
     }
 
     public List<Event> getEventsByCategory(String category) {
-        return eventRepository.getAll(EVENT_PREFIX).stream()
-                .filter(e -> e.getCategory().equals(category))
-                .toList();
+        return eventRepository.findByCategory(category);
     }
 }

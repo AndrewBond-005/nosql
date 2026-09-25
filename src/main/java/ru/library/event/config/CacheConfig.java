@@ -13,7 +13,7 @@ public class CacheConfig {
         return new ConcurrentMapCacheManager(
                 "events",
                 "userSettings",
-                "orders"
+                "userThemes"
         );
     }
 }

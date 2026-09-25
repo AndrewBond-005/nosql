@@ -1,244 +1,271 @@
-# README
+# Library Events Service
 
-## Оглавление
-* [Что это за проект](#что-это-за-проект)
-* [Профили](#профили)
-* [Структура проекта](#структура-проекта)
-* [Как поднять всё и заставить работать](#как-поднять-всё-и-заставить-работать)
-  * [Версия 1. Подробная (для первого запуска)](#версия-1-подробная-для-первого-запуска)
-  * [Версия 2. Короткая (для тех, кто уже в теме)](#версия-2-короткая-для-тех-кто-уже-в-теме)
-* [Частые проблемы](#частые-проблемы)
-* [Что где лежит (карта ключей в etcd)](#что-где-лежит-карта-ключей-в-etcd)
+Веб-приложение на Spring Boot для управления заявками на книги-события.
 
----
+## Терминология
 
-## Что это за проект
+| В интерфейсе | Что это | В API и базе |
+|---|---|---|
+| Каталог | Книга, которую можно взять | `events`, таблица `events`, `/api/events` |
+| Событие | Факт взятия или возврата книги | `orders`, таблица `orders`, `/api/orders` |
+| Временная заявка | Короткоживущая бронь с TTL | Etcd, `/api/temp-requests` |
 
-Веб-приложение на Spring Boot — сервис заявок библиотеки. Данные хранятся в etcd (key-value БД). Менеджер оформляет заказы на книги-события, работает TTL для временных заявок, кэш для настроек, атомарный счётчик просмотров.
+Статусы события: `PENDING` — «Запрошена», `CONFIRMED` — «Выдана», `COMPLETED` — «Возвращена», `CANCELLED` — «Отменена».
 
-## Профили
+## Где хранятся данные
 
-В проекте два профиля Spring — они определяют, **где хранятся данные**:
+| Данные | Хранилище |
+|---|---|
+| Книги (каталог) | PostgreSQL, таблица `events` |
+| Менеджеры | PostgreSQL, таблица `managers` |
+| События (взятия и возвраты) | PostgreSQL, таблица `orders` |
+| Настройки пользователей | PostgreSQL, таблица `user_settings` |
+| Временные заявки | Etcd, ключи `librarytemp:{uuid}` с lease TTL |
 
-| Профиль | Нужен ли etcd | Где данные | Когда использовать |
-|---|---|---|---|
-| `inmemory` (по умолчанию) | Нет | В памяти Java (HashMap) | Быстрая проверка логики, юнит-тесты |
-| `etcd` | Да, обязательно | В etcd | Полная проверка задания: lease, CAS-счётчик, snapshot |
+Режима `inmemory` больше нет. Приложению всегда нужны PostgreSQL и Etcd.
 
-Переключение: `--spring.profiles.active=etcd` (или `inmemory`).
+## Требования
 
-**Важно:** без явного указания профиля приложение поднимется в `inmemory` — etcd ему не нужна, но данные исчезнут при перезапуске.
+- JDK 17 или новее
+- Maven 3.9+
+- Docker Desktop с Docker Compose
 
----
+Проверка:
 
-## Структура проекта
-
-```text
-library-events-service/
-├── docker-compose.yml                      # Etcd 3.5.9, порт 2379
-├── pom.xml                                 # Зависимости: Spring Boot, jetcd 0.8.6, awaitility
-├── README.md
-├── backup.db                               # (создаётся вручную) snapshot etcd
-└── src/
-    ├── main/
-    │   ├── java/
-    │   │   └── com/
-    │   │       └── example/
-    │   │           └── library/
-    │   │               ├── LibraryEventsApplication.java    # Точка входа Spring Boot
-    │   │               ├── config/
-    │   │               │   └── RepositoryConfig.java        # @Profile("etcd"): Client, KV, Lease + репозитории
-    │   │               ├── repository/
-    │   │               │   ├── KeyValueRepository.java      # Интерфейс: put/get/delete/getByPrefix, putWithTtl, incrementCounter
-    │   │               │   ├── EtcdKeyValueRepository.java  # @Profile("etcd"): Реализация через Etcd KV API
-    │   │               │   └── InMemoryKeyValueRepository.java # @Profile("inmemory"): HashMap-версия для тестов
-    │   │               ├── model/
-    │   │               │   ├── Event.java                   # Книга-событие
-    │   │               │   ├── Manager.java                 # Менеджер
-    │   │               │   ├── Order.java                   # Заказ
-    │   │               │   ├── TemporaryRequest.java        # Временная заявка (TTL)
-    │   │               │   └── UserSettings.java            # Настройки пользователя
-    │   │               ├── service/
-    │   │               │   ├── EventService.java            # @Cacheable на чтение событий
-    │   │               │   ├── OrderService.java            # ReentrantLock пер-событие, check-and-decrement, создание заказа
-    │   │               │   └── UserSettingsService.java     # @Cacheable на настройки
-    │   │               ├── controller/
-    │   │               │   ├── EventController.java         # REST /events
-    │   │               │   ├── OrderController.java         # REST /orders
-    │   │               │   └── SettingsController.java      # REST /settings
-    │   │               └── exception/
-    │   │                   ├── EventNotFoundException.java       # 404
-    │   │                   ├── NoAvailableCopiesException.java   # 409
-    │   │                   ├── OrderNotFoundException.java       # 404
-    │   │                   └── GlobalExceptionHandler.java       # @ControllerAdvice
-    │   └── resources/
-    │       └── application.properties       # Профили inmemory/etcd, etcd endpoint, namespace
-    └── test/
-        └── java/
-            └── com/
-                └── example/
-                    └── library/
-                        └── ConcurrentOrderTest.java # JUnit 5 + awaitility: Параллельные заказы + атомарный счётчик
-```
----
-
-# Как поднять всё и заставить работать
-
-## Версия 1. Подробная (для первого запуска)
-
-### Шаг 0. Что нужно установить заранее
-
-* **JDK 17+** (`java -version`)
-* **Maven** (`mvn -version`)
-* **Docker + Docker Compose** (`docker --version`, `docker compose version`)
-* **etcdctl** — для проверки и snapshot (опционально, но полезно)
-
-Проверь, что порт **2379** свободен:
 ```bash
-# Linux/Mac
-lsof -i :2379
-# Windows
-netstat -ano | findstr 2379
+java -version
+mvn -version
+docker --version
+docker compose version
 ```
-Если занят — останови процесс или поменяй порт в `docker-compose.yml` и `application.properties`.
 
-### Шаг 1. Собрать приложение
+## Запуск с нуля
+
+### 1. Запустить PostgreSQL и Etcd
 
 Из корня проекта:
-```bash
-mvn clean package
-```
-После успешной сборки появится `target/library-events-service-1.0.0.jar`.
 
-### Шаг 2. Поднять etcd
-Из корня написать в термминал:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-Проверить, что контейнер жив(через пару секунд):
+Если на компьютере уже установлен и запущен PostgreSQL, сначала проверь порт `5432`: локальный сервер и контейнер не должны одновременно занимать один порт.
+
 ```bash
-docker ps
-# должен быть контейнер с etcd на порту 2379
+netstat -ano | findstr :5432
 ```
 
-Проверить, что etcd отвечает:
+Останови локальный PostgreSQL либо используй его вместо контейнера PostgreSQL из Compose.
+
+Проверить состояние контейнеров:
+
 ```bash
-etcdctl endpoint health --endpoints=localhost:2379
-# ожидаемо: localhost:2379 is healthy: successfully committed proposal
+docker compose ps
 ```
 
-### Шаг 3. Запустить приложение с профилем etcd
+PostgreSQL должен перейти в состояние `healthy`, Etcd — `running`.
+
+Проверить PostgreSQL:
+
+```bash
+docker compose exec postgres pg_isready -U library -d library
+```
+
+Ожидаемый ответ:
+
+```text
+/var/run/postgresql:5432 - accepting connections
+```
+
+Проверить Etcd:
+
+```bash
+docker compose exec etcd etcdctl endpoint health --endpoints=http://127.0.0.1:2379
+```
+
+### 2. Собрать и проверить приложение
+
+```bash
+mvn clean verify
+```
+
+Тесты `ConcurrentOrderTest` сами запускают временные контейнеры PostgreSQL и Etcd через Testcontainers. Docker должен быть запущен. Если Docker недоступен, тесты будут пропущены.
+
+Готовый файл появится здесь:
+
+```text
+target/library-events-service-1.0.0.jar
+```
+
+### 3. Запустить приложение
+
+```bash
+java -jar target/library-events-service-1.0.0.jar
+```
+
+После запуска:
+
+- приложение: http://localhost:8081
+- PostgreSQL: `localhost:5432`
+- Etcd: `localhost:2379`
+
+Spring Boot автоматически создаст таблицы `events`, `managers`, `orders` и `user_settings` при первом подключении к PostgreSQL. При пустой базе `DataInitializer` добавит демонстрационные события. Пользователей и отдельных менеджеров нужно создавать через интерфейс: менеджером заказа всегда является авторизованный пользователь.
+
+## Настройки подключения
+
+Значения по умолчанию уже совпадают с `docker-compose.yml`:
+
+| Переменная | Значение по умолчанию |
+|---|---|
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/library` |
+| `SPRING_DATASOURCE_USERNAME` | `library` |
+| `SPRING_DATASOURCE_PASSWORD` | `library` |
+| `ETCD_ENDPOINTS` | `http://localhost:2379` |
+| `ETCD_NAMESPACE` | `library` |
+| `APP_MIGRATE_ETCD_DATA` | `false` |
+
+PowerShell:
+
+```powershell
+$env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5432/library"
+$env:SPRING_DATASOURCE_USERNAME = "library"
+$env:SPRING_DATASOURCE_PASSWORD = "library"
+$env:ETCD_ENDPOINTS = "http://localhost:2379"
+java -jar target/library-events-service-1.0.0.jar
+```
+
+Чтобы передать настройки напрямую:
 
 ```bash
 java -jar target/library-events-service-1.0.0.jar \
-     --server.port=8081 \
-     --spring.profiles.active=etcd
+  --spring.datasource.url=jdbc:postgresql://localhost:5432/library \
+  --spring.datasource.username=library \
+  --spring.datasource.password=library \
+  --etcd.endpoints=http://localhost:2379
 ```
 
-### Шаг 4. Проверить, что всё работает end-to-end
+## Перенос существующих данных из Etcd
 
-Создай книгу-событие:
-```bash
-curl -X POST http://localhost:8081/events \
-     -H "Content-Type: application/json" \
-     -d '{"title":"Мастер и Маргарита","author":"Булгаков","copies":3}'
-```
-
-Посмотри, что реально лежит в etcd:
-```bash
-etcdctl get --prefix event:
-```
-Ты должен увидеть свой ключ `event:{uuid}` с JSON-значением. Если пусто — приложение работает не с той etcd или поднялось в `inmemory`.
-
-Оформи заказ (проверка основного сценария):
-```bash
-curl -X POST http://localhost:8081/orders \
-     -H "Content-Type: application/json" \
-     -d '{"eventId":"<uuid из шага выше>","userId":42}'
-```
-
-Проверить счётчик просмотров (атомарный механизм):
-```bash
-curl http://localhost:8081/events/<uuid>
-etcdctl get views:<uuid>
-# значение должно увеличиваться с каждым GET
-```
-
-Проверить TTL (временная заявка):
-```bash
-etcdctl get --prefix temp:
-# через N секунд после создания — ключ исчезает сам
-```
-
-### Шаг 5. Snapshot (сохранение/восстановление)
+Временные заявки всегда остаются в Etcd. Для существующих событий, менеджеров, заказов, настроек и счётчиков просмотров предусмотрен отдельный одноразовый запуск:
 
 ```bash
-# Сохранить снимок
-etcdctl snapshot save backup.db
-
-# Восстановить (etcd должна быть остановлена)
-docker-compose down
-etcdctl snapshot restore backup.db --data-dir=/tmp/etcd-restore
+java -jar target/library-events-service-1.0.0.jar --app.migrate-etcd-data=true
 ```
 
-### Шаг 6. Остановить всё
+Миграция:
+
+- читает из Etcd префиксы `event:`, `manager:`, `order:`, `settings:` и `views:`;
+- записывает события, менеджеров, заказы и настройки в PostgreSQL;
+- переносит счётчик просмотров в поле `events.view_count`;
+- не изменяет и не удаляет временные заявки;
+- не удаляет старые ключи Etcd.
+
+Дождитесь сообщения:
+
+```text
+Legacy Etcd data migration to PostgreSQL completed
+```
+
+После этого остановите приложение и запустите его обычной командой без флага миграции.
+
+## Проверка данных
+
+### PostgreSQL
 
 ```bash
-# Приложение — Ctrl+C в терминале, где оно запущено
-docker-compose down
+docker compose exec postgres psql -U library -d library -c "SELECT id, title, available_copies, view_count FROM events;"
+docker compose exec postgres psql -U library -d library -c "SELECT id, name, email FROM managers;"
+docker compose exec postgres psql -U library -d library -c "SELECT id, event_id, user_id, status FROM orders;"
+docker compose exec postgres psql -U library -d library -c "SELECT * FROM user_settings;"
 ```
 
----
-
-## Версия 2. Короткая (для тех, кто уже в теме)
+### Etcd
 
 ```bash
-# 1. Сборка
-mvn clean package
-
-# 2. etcd
-docker-compose up -d
-etcdctl endpoint health --endpoints=localhost:2379
-
-# 3. Приложение с etcd
-java -jar target/library-events-service-1.0.0.jar \
-     --server.port=8081 \
-     --spring.profiles.active=etcd
-
-# 4. Проверка
-curl -X POST localhost:8081/events -H "Content-Type: application/json" \
-     -d '{"title":"Test","author":"A","copies":3}'
-etcdctl get --prefix event:
+docker compose exec etcd etcdctl get --prefix librarytemp: --endpoints=http://127.0.0.1:2379
 ```
 
-Без etcd (только для быстрой проверки логики):
+Создать временную заявку с TTL 30 секунд:
+
 ```bash
-java -jar target/library-events-service-1.0.0.jar --server.port=8081
-# профиль inmemory подхватится по умолчанию
+curl -X POST "http://localhost:8081/api/temp-requests?eventId=EVENT_ID&userId=user01&purpose=reservation&ttlSeconds=30"
 ```
 
----
+Ключ временной заявки должен исчезнуть из Etcd автоматически примерно через 30 секунд.
+
+## Проверка API
+
+Создать событие:
+
+```bash
+curl -X POST http://localhost:8081/api/events \
+  -H "Content-Type: application/json" \
+  -d "{\"title\":\"Мастер и Маргарита\",\"description\":\"Роман\",\"author\":\"Михаил Булгаков\",\"category\":\"Классика\",\"availableCopies\":3}"
+```
+
+Получить события:
+
+```bash
+curl http://localhost:8081/api/events
+```
+
+Увеличить число просмотров:
+
+```bash
+curl -X POST http://localhost:8081/api/events/EVENT_ID/views
+```
+
+Создать заказ:
+
+```bash
+curl -X POST "http://localhost:8081/api/orders" \
+  -H "Content-Type: application/json" \
+  -d "{\"eventId\":\"EVENT_ID\"}"
+```
+
+Заказчик и менеджер заказа — всегда текущий авторизованный пользователь, отдельного менеджера выбирать не нужно.
+
+Прочитать и сохранить предпочтительную тему оформления (значения `LIGHT` и `DARK`):
+
+```bash
+curl -X PUT http://localhost:8081/api/settings/user01/theme \
+  -H "Authorization: Basic BASE64_USER01_PASSWORD" \
+  -H "Content-Type: application/json" \
+  -d "{\"theme\":\"DARK\"}"
+
+curl http://localhost:8081/api/settings/user01/theme \
+  -H "Authorization: Basic BASE64_USER01_PASSWORD"
+```
+
+Тема хранится в профиле пользователя и отдаётся из кэша `userThemes`, поэтому повторный запрос не обращается к PostgreSQL.
+
+## Остановка
+
+Остановить приложение клавишами `Ctrl+C` в его терминале.
+
+Остановить контейнеры:
+
+```bash
+docker compose down
+```
+
+Данные сохранятся в Docker volumes.
+
+Полностью удалить локальные базы и данные Etcd:
+
+```bash
+docker compose down -v
+```
+
+Команда удаляет локальные данные PostgreSQL и Etcd без возможности восстановления.
 
 ## Частые проблемы
 
-| Симптом | Причина | Что делать |
+| Ошибка | Причина | Решение |
 |---|---|---|
-| `Connection refused` при старте | etcd не запущена | `docker-compose up -d`, проверить `docker ps` |
-| `etcdctl get --prefix event:` пусто, а приложение отвечает 200 | поднялся профиль `inmemory` | добавить `--spring.profiles.active=etcd` |
-| `docker-compose up` падает с «port is already allocated» | порт 2379 занят | освободить порт или поменять в `docker-compose.yml` |
-| Приложение пишет в etcd, но `etcdctl` её не видит | разные endpoints | сверить адрес в `application.properties` и `docker-compose.yml` |
-| Snapshot не восстанавливается | etcd ещё работает | сначала `docker-compose down` |
-
-## Что где лежит (карта ключей в etcd)
-
-```text
-event:{uuid}       → JSON книги-события
-manager:{uuid}     → JSON менеджера
-order:{uuid}       → JSON заказа
-temp:{uuid}        → JSON временной заявки (с lease, самоудаляется)
-settings:{userId}  → JSON настроек пользователя
-views:{eventId}    → "123" (строка с числом, атомарный инкремент)
-```
-
-Префиксы позволяют выбирать все объекты типа: `etcdctl get --prefix event:`.
+| `Connection refused` для PostgreSQL | PostgreSQL не запущена | `docker compose up -d`, затем `docker compose ps` |
+| `Connection refused` для Etcd | Etcd не запущена | `docker compose up -d`, затем `docker compose exec etcd etcdctl endpoint health --endpoints=http://127.0.0.1:2379` |
+| `password authentication failed` | Неверный пароль | Для локального запуска используй `library` / `library` |
+| `port is already allocated` | Порт 5432 или 2379 занят | Останови процесс на порту либо измени порт в `docker-compose.yml` и настройках приложения |
+| `Unable to rename ... .jar.original` | Приложение запущено из `target` | Останови приложение и повтори `mvn clean package` |
+| Таблиц нет в PostgreSQL | Приложение ещё не подключалось | Запусти приложение и проверь `docker compose exec postgres psql -U library -d library -c "\dt"` |

@@ -6,21 +6,59 @@
     <title>Библиотека — Сервис заявок</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        :root {
+            --bg: #f5f5f5;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --muted: #999999;
+            --border: #eeeeee;
+            --border-soft: #f0f0f0;
+            --row-hover: #f8f9fa;
+            --th-bg: #fafafa;
+            --form-bg: #fafafa;
+            --label: #555555;
+            --input-bg: #ffffff;
+            --input-border: #dddddd;
+            --readonly-bg: #f2f2f2;
+            --readonly-text: #666666;
+            --shadow: 0 1px 3px rgba(0,0,0,.1);
+        }
+        body[data-theme="dark"] {
+            --bg: #14181d;
+            --card-bg: #1e242b;
+            --text: #e6e9ec;
+            --muted: #8b949e;
+            --border: #2b333c;
+            --border-soft: #262d35;
+            --row-hover: #232a32;
+            --th-bg: #232a32;
+            --form-bg: #1a2027;
+            --label: #b6c0c9;
+            --input-bg: #171d23;
+            --input-border: #333c46;
+            --readonly-bg: #232a32;
+            --readonly-text: #b6c0c9;
+            --shadow: 0 1px 3px rgba(0,0,0,.5);
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); transition: background .2s, color .2s; }
         header { background: #2c3e50; color: #fff; padding: 16px 24px; }
+        .header-content { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
         header h1 { font-size: 20px; font-weight: 600; }
-        nav { display: flex; gap: 4px; background: #34495e; padding: 0 24px; }
+        .user-actions { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+        .user-actions button { background: #465867; color: #fff; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+        .user-actions button:hover { background: #566a7b; }
+        nav { display: flex; gap: 4px; background: #34495e; padding: 0 max(24px, calc((100% - 1068px) / 2)); }
         nav button { background: none; border: none; color: #95a5a6; padding: 12px 20px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; transition: all .15s; }
         nav button:hover { color: #ecf0f1; }
         nav button.active { color: #fff; border-bottom-color: #3498db; }
         main { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
-        .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.1); overflow: hidden; margin-bottom: 20px; }
-        .card-header { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .card { background: var(--card-bg); border-radius: 8px; box-shadow: var(--shadow); overflow: hidden; margin-bottom: 20px; }
+        .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .card-header h2 { font-size: 16px; font-weight: 600; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
-        th { background: #fafafa; font-weight: 600; color: #555; }
-        tr:hover { background: #f8f9fa; }
+        th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border-soft); font-size: 14px; }
+        th { background: var(--th-bg); font-weight: 600; color: var(--label); }
+        tr:hover { background: var(--row-hover); }
         .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
         .badge-pending { background: #fff3cd; color: #856404; }
         .badge-confirmed { background: #d1ecf1; color: #0c5460; }
@@ -33,40 +71,120 @@
         .btn-success { background: #27ae60; color: #fff; }
         .btn-sm { padding: 5px 12px; font-size: 12px; }
         .actions { display: flex; gap: 6px; }
-        .empty { padding: 40px; text-align: center; color: #999; }
+        .empty { padding: 40px; text-align: center; color: var(--muted); }
         .section { display: none; }
         .section.active { display: block; }
-        .form-row { display: flex; gap: 10px; align-items: end; padding: 16px 20px; background: #fafafa; border-top: 1px solid #eee; }
+        .form-row { display: flex; gap: 10px; align-items: end; padding: 16px 20px; background: var(--form-bg); border-top: 1px solid var(--border); }
         .form-group { display: flex; flex-direction: column; gap: 4px; }
-        .form-group label { font-size: 12px; font-weight: 600; color: #555; }
-        .form-group input, .form-group select { padding: 7px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+        .form-group label { font-size: 12px; font-weight: 600; color: var(--label); }
+        .form-group input, .form-group select, .form-group textarea { padding: 7px 10px; border: 1px solid var(--input-border); border-radius: 4px; font-size: 13px; font-family: inherit; background: var(--input-bg); color: var(--text); }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #3498db; }
+        #event-form { flex-wrap: wrap; }
+        #event-form .form-group { flex: 1 1 150px; }
+        #event-form .form-group.wide { flex: 2 1 260px; }
+        #event-form .form-group.description { flex: 3 1 360px; }
+        #event-form textarea { resize: vertical; min-height: 36px; }
+        #event-form button { align-self: flex-end; }
+        .form-message { flex: 1 1 100%; min-height: 16px; color: var(--muted); font-size: 12px; }
+        .form-message.error { color: #e74c3c; }
+        .form-message.success { color: #27ae60; }
         .counter { font-size: 24px; font-weight: 700; color: #3498db; }
-        .counter-label { font-size: 12px; color: #999; }
+        .counter-label { font-size: 12px; color: var(--muted); }
         .stat-row { display: flex; gap: 24px; padding: 16px 20px; }
         .stat { text-align: center; }
         .view-btn { cursor: pointer; color: #3498db; font-weight: 600; }
         .view-btn:hover { text-decoration: underline; }
+        [hidden] { display: none !important; }
+        .auth-screen { position: fixed; inset: 0; z-index: 1000; background: rgba(44,62,80,.96); display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .auth-card { width: 100%; max-width: 380px; background: var(--card-bg); border-radius: 10px; box-shadow: 0 12px 36px rgba(0,0,0,.3); padding: 24px; }
+        .auth-card h2 { font-size: 20px; margin-bottom: 16px; text-align: center; }
+        .auth-tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+        .auth-tabs button { flex: 1; padding: 9px; border: 1px solid var(--input-border); background: var(--form-bg); border-radius: 5px; cursor: pointer; color: var(--text); }
+        .auth-tabs button.active { background: #3498db; color: #fff; border-color: #3498db; }
+        .auth-form { display: flex; flex-direction: column; gap: 8px; }
+        .auth-form label { font-size: 12px; font-weight: 600; color: var(--label); }
+        .auth-form input { padding: 9px 10px; border: 1px solid var(--input-border); border-radius: 5px; font-size: 14px; background: var(--input-bg); color: var(--text); }
+        .auth-form button { margin-top: 6px; padding: 10px; border: none; border-radius: 5px; background: #3498db; color: #fff; font-weight: 600; cursor: pointer; }
+        .auth-error { min-height: 20px; margin-top: 12px; color: #e74c3c; font-size: 13px; text-align: center; }
+        .input-readonly { background: var(--readonly-bg); color: var(--readonly-text); }
     </style>
 </head>
 <body>
+    <div id="auth-screen" class="auth-screen">
+        <div class="auth-card">
+            <h2>Библиотека — Вход</h2>
+            <div class="auth-tabs">
+                <button id="login-tab" class="active" type="button" onclick="setAuthMode('login')">Вход</button>
+                <button id="register-tab" type="button" onclick="setAuthMode('register')">Регистрация</button>
+            </div>
+            <form id="login-form" class="auth-form" onsubmit="login(event)">
+                <label for="login-user">User ID</label>
+                <input id="login-user" autocomplete="username" pattern="[A-Za-z0-9_-]{3,64}" required />
+                <label for="login-password">Пароль</label>
+                <input id="login-password" type="password" autocomplete="current-password" minlength="6" maxlength="72" required />
+                <button type="submit">Войти</button>
+            </form>
+            <form id="register-form" class="auth-form" onsubmit="register(event)" hidden>
+                <label for="register-user">User ID</label>
+                <input id="register-user" autocomplete="username" pattern="[A-Za-z0-9_-]{3,64}" required />
+                <label for="register-password">Пароль</label>
+                <input id="register-password" type="password" autocomplete="new-password" minlength="6" maxlength="72" required />
+                <label for="register-password-confirm">Повторите пароль</label>
+                <input id="register-password-confirm" type="password" autocomplete="new-password" minlength="6" maxlength="72" required />
+                <button type="submit">Зарегистрироваться</button>
+            </form>
+            <div id="auth-error" class="auth-error"></div>
+        </div>
+    </div>
     <header>
-        <h1>Библиотека — Сервис заявок</h1>
+        <div class="header-content">
+            <h1>Библиотека — Сервис заявок</h1>
+            <div id="user-actions" class="user-actions" hidden>
+                <span id="current-user"></span>
+                <button id="theme-toggle" type="button" onclick="toggleTheme()">Тёмная тема</button>
+                <button type="button" onclick="logout()">Выйти</button>
+            </div>
+        </div>
     </header>
-    <nav>
-        <button class="active" onclick="showSection('events', this)">События</button>
-        <button onclick="showSection('orders', this)">Заказы</button>
-        <button onclick="showSection('temp', this)">Временные заявки</button>
-        <button onclick="showSection('managers', this)">Менеджеры</button>
-        <button onclick="showSection('settings', this)">Настройки</button>
-    </nav>
-    <main>
+    <div id="app-content" hidden>
+        <nav>
+            <button class="active" onclick="showSection('events', this)">Каталог</button>
+            <button onclick="showSection('orders', this)">События</button>
+            <button onclick="showSection('temp', this)">Временные заявки</button>
+            <button onclick="showSection('settings', this)">Настройки</button>
+        </nav>
+        <main>
         <!-- EVENTS -->
         <div id="events" class="section active">
             <div class="card">
                 <div class="card-header">
-                    <h2>Каталог событий</h2>
+                    <h2>Каталог книг</h2>
                     <button class="btn btn-primary" onclick="loadEvents()">Обновить</button>
                 </div>
+                <form class="form-row" id="event-form" novalidate>
+                    <div class="form-group wide">
+                        <label for="event-title">Название</label>
+                        <input id="event-title" maxlength="255" placeholder="Например, Мастер и Маргарита" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="event-author">Автор</label>
+                        <input id="event-author" maxlength="255" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="event-category">Категория</label>
+                        <input id="event-category" maxlength="255" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="event-copies">Копий</label>
+                        <input id="event-copies" type="number" min="0" step="1" value="1" required />
+                    </div>
+                    <div class="form-group description">
+                        <label for="event-description">Описание</label>
+                        <textarea id="event-description" maxlength="2000" placeholder="Краткое описание книги"></textarea>
+                    </div>
+                    <button class="btn btn-success" type="submit">Добавить книгу</button>
+                    <div id="event-form-message" class="form-message"></div>
+                </form>
                 <table>
                     <thead>
                         <tr>
@@ -87,31 +205,27 @@
         <div id="orders" class="section">
             <div class="card">
                 <div class="card-header">
-                    <h2>Заказы</h2>
+                    <h2>События: взять и вернуть книгу</h2>
                     <button class="btn btn-primary" onclick="loadOrders()">Обновить</button>
                 </div>
-                <div class="form-row" id="order-form" style="display:none;">
+                <div class="form-row" id="order-form">
                     <div class="form-group">
-                        <label>Событие</label>
-                        <select id="order-event"></select>
+                        <label>Книга</label>
+                        <select id="order-event" onchange="updateOrderAvailability()"></select>
                     </div>
                     <div class="form-group">
-                        <label>ID пользователя</label>
-                        <input id="order-user" value="user01" />
+                        <label>Пользователь и менеджер</label>
+                        <input id="order-user" class="input-readonly" readonly />
                     </div>
-                    <div class="form-group">
-                        <label>Менеджер</label>
-                        <select id="order-manager"></select>
-                    </div>
-                    <button class="btn btn-success" onclick="createOrder()">Оформить</button>
+                    <button id="order-submit" class="btn btn-success" onclick="createOrder()">Оформить</button>
+                    <div id="order-form-message" class="form-message"></div>
                 </div>
                 <table>
                     <thead>
                         <tr>
                             <th>ID</th>
-                            <th>Событие</th>
+                            <th>Книга</th>
                             <th>Пользователь</th>
-                            <th>Менеджер</th>
                             <th>Статус</th>
                             <th>Действия</th>
                         </tr>
@@ -130,12 +244,12 @@
                 </div>
                 <div class="form-row" id="temp-form" style="display:none;">
                     <div class="form-group">
-                        <label>Событие</label>
+                        <label>Книга</label>
                         <select id="temp-event"></select>
                     </div>
                     <div class="form-group">
-                        <label>ID пользователя</label>
-                        <input id="temp-user" value="user01" />
+                        <label>Пользователь</label>
+                        <input id="temp-user" class="input-readonly" readonly />
                     </div>
                     <div class="form-group">
                         <label>TTL (сек)</label>
@@ -159,37 +273,6 @@
             </div>
         </div>
 
-        <!-- MANAGERS -->
-        <div id="managers" class="section">
-            <div class="card">
-                <div class="card-header">
-                    <h2>Менеджеры</h2>
-                    <button class="btn btn-primary" onclick="loadManagers()">Обновить</button>
-                </div>
-                <div class="form-row" id="manager-form" style="display:none;">
-                    <div class="form-group">
-                        <label>Имя</label>
-                        <input id="mgr-name" />
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input id="mgr-email" />
-                    </div>
-                    <button class="btn btn-success" onclick="createManager()">Добавить</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Имя</th>
-                            <th>Email</th>
-                            <th>Активен</th>
-                        </tr>
-                    </thead>
-                    <tbody id="managers-body"></tbody>
-                </table>
-            </div>
-        </div>
-
         <!-- SETTINGS -->
         <div id="settings" class="section">
             <div class="card">
@@ -199,7 +282,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>User ID</label>
-                        <input id="set-user" value="user01" />
+                        <input id="set-user" class="input-readonly" readonly />
                     </div>
                     <button class="btn btn-primary" onclick="loadSettings()">Загрузить</button>
                 </div>
@@ -223,17 +306,26 @@
                         <label>Результатов на страницу</label>
                         <input id="set-perpage" type="number" />
                     </div>
+                    <div class="form-group">
+                        <label>Тема</label>
+                        <select id="set-theme">
+                            <option value="LIGHT">Светлая</option>
+                            <option value="DARK">Тёмная</option>
+                        </select>
+                    </div>
                     <button class="btn btn-success" onclick="saveSettings()">Сохранить</button>
                 </div>
             </div>
         </div>
-    </main>
+        </main>
+    </div>
 
     <script>
         const API = '';
+        const THEME_STORAGE_KEY = 'preferredTheme';
         let eventsCache = [];
-        let managersCache = [];
         let tempTimer = null;
+        let currentUser = null;
 
         function showSection(id, btn) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -243,21 +335,180 @@
             if (id === 'events') loadEvents();
             if (id === 'orders') loadOrders();
             if (id === 'temp') loadTempRequests();
-            if (id === 'managers') loadManagers();
+            if (id === 'settings') loadSettings();
         }
 
-        async function api(url, opts) {
-            const res = await fetch(API + url, opts);
-            if (!res.ok) throw new Error(res.status);
+        async function api(url, opts = {}, authenticated = true) {
+            const headers = new Headers(opts.headers || {});
+            if (authenticated) {
+                const auth = sessionStorage.getItem('auth');
+                if (auth) headers.set('Authorization', auth);
+            }
+            const res = await fetch(API + url, { ...opts, headers });
             const text = await res.text();
-            return text ? JSON.parse(text) : null;
+            let data = null;
+            if (text) {
+                try { data = JSON.parse(text); } catch (error) { data = text; }
+            }
+            if (!res.ok) {
+                if (res.status === 401 && authenticated) showAuth();
+                const message = data && typeof data === 'object' ? data.message : `HTTP ${res.status}`;
+                const error = new Error(message || `HTTP ${res.status}`);
+                error.status = res.status;
+                throw error;
+            }
+            return data;
+        }
+
+        function basicToken(userId, password) {
+            const bytes = new TextEncoder().encode(`${userId}:${password}`);
+            return `Basic ${btoa(String.fromCharCode(...bytes))}`;
+        }
+
+        function setAuthMode(mode) {
+            const isLogin = mode === 'login';
+            document.getElementById('login-tab').classList.toggle('active', isLogin);
+            document.getElementById('register-tab').classList.toggle('active', !isLogin);
+            document.getElementById('login-form').hidden = !isLogin;
+            document.getElementById('register-form').hidden = isLogin;
+            document.getElementById('auth-error').textContent = '';
+        }
+
+        function applyTheme(theme) {
+            const value = theme === 'DARK' ? 'DARK' : 'LIGHT';
+            document.body.dataset.theme = value === 'DARK' ? 'dark' : 'light';
+            const button = document.getElementById('theme-toggle');
+            if (button) button.textContent = value === 'DARK' ? 'Светлая тема' : 'Тёмная тема';
+            const select = document.getElementById('set-theme');
+            if (select) select.value = value;
+            return value;
+        }
+
+        function currentTheme() {
+            return document.body.dataset.theme === 'dark' ? 'DARK' : 'LIGHT';
+        }
+
+        async function loadProfileTheme() {
+            const local = sessionStorage.getItem(THEME_STORAGE_KEY);
+            if (local) applyTheme(local);
+            if (!currentUser) return;
+            try {
+                const saved = await api(`/api/settings/${currentUser.userId}/theme`);
+                applyTheme(saved.theme);
+                sessionStorage.setItem(THEME_STORAGE_KEY, saved.theme);
+            } catch (error) {
+                applyTheme(local || 'LIGHT');
+            }
+        }
+
+        async function toggleTheme() {
+            const previous = currentTheme();
+            const next = previous === 'DARK' ? 'LIGHT' : 'DARK';
+            applyTheme(next);
+            if (!currentUser) return;
+            try {
+                const saved = await api(`/api/settings/${currentUser.userId}/theme`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: next })
+                });
+                applyTheme(saved.theme);
+                sessionStorage.setItem(THEME_STORAGE_KEY, saved.theme);
+            } catch (error) {
+                applyTheme(previous);
+                alert('Не удалось сохранить тему: ' + error.message);
+            }
+        }
+
+        function showAuth() {
+            sessionStorage.removeItem('auth');
+            currentUser = null;
+            if (tempTimer) { clearInterval(tempTimer); tempTimer = null; }
+            document.getElementById('auth-screen').hidden = false;
+            document.getElementById('app-content').hidden = true;
+            document.getElementById('user-actions').hidden = true;
+            setAuthMode('login');
+        }
+
+        function applySession(user) {
+            currentUser = user;
+            document.getElementById('auth-screen').hidden = true;
+            document.getElementById('app-content').hidden = false;
+            document.getElementById('user-actions').hidden = false;
+            document.getElementById('current-user').textContent = user.userId;
+            document.getElementById('order-user').value = user.userId;
+            document.getElementById('temp-user').value = user.userId;
+            document.getElementById('set-user').value = user.userId;
+            document.getElementById('settings-fields').style.display = 'none';
+            loadEvents();
+            loadProfileTheme();
+        }
+
+        async function establishSession(userId, password) {
+            sessionStorage.setItem('auth', basicToken(userId, password));
+            const user = await api('/api/auth/me');
+            applySession(user);
+        }
+
+        async function login(event) {
+            event.preventDefault();
+            const userId = document.getElementById('login-user').value.trim().toLowerCase();
+            const password = document.getElementById('login-password').value;
+            try {
+                await api('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, password })
+                }, false);
+                await establishSession(userId, password);
+            } catch (error) {
+                document.getElementById('auth-error').textContent = error.message;
+            }
+        }
+
+        async function register(event) {
+            event.preventDefault();
+            const userId = document.getElementById('register-user').value.trim().toLowerCase();
+            const password = document.getElementById('register-password').value;
+            const confirmation = document.getElementById('register-password-confirm').value;
+            if (password !== confirmation) {
+                document.getElementById('auth-error').textContent = 'Пароли не совпадают';
+                return;
+            }
+            try {
+                await api('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, password })
+                }, false);
+                await establishSession(userId, password);
+            } catch (error) {
+                document.getElementById('auth-error').textContent = error.message;
+            }
+        }
+
+        function logout() {
+            showAuth();
+        }
+
+        async function restoreSession() {
+            if (!sessionStorage.getItem('auth')) {
+                showAuth();
+                return;
+            }
+            try {
+                const user = await api('/api/auth/me');
+                applySession(user);
+            } catch (error) {
+                showAuth();
+            }
         }
 
         // --- EVENTS ---
         async function loadEvents() {
             eventsCache = await api('/api/events');
             const tbody = document.getElementById('events-body');
-            if (!eventsCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Нет событий</td></tr>'; return; }
+            if (!eventsCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">В каталоге нет книг</td></tr>'; return; }
             tbody.innerHTML = eventsCache.map(e => `
                 <tr>
                     <td><strong>${esc(e.title)}</strong><br><small style="color:#999">${esc(e.description||'')}</small></td>
@@ -272,52 +523,137 @@
             `).join('');
         }
 
+        function showEventFormMessage(text, type) {
+            const message = document.getElementById('event-form-message');
+            message.textContent = text;
+            message.className = `form-message ${type || ''}`;
+        }
+
+        async function createEvent() {
+            const form = document.getElementById('event-form');
+            if (!form.reportValidity()) return;
+
+            const title = document.getElementById('event-title').value.trim();
+            const description = document.getElementById('event-description').value.trim();
+            const author = document.getElementById('event-author').value.trim();
+            const category = document.getElementById('event-category').value.trim();
+            const copiesValue = document.getElementById('event-copies').value;
+            const availableCopies = Number(copiesValue);
+            const submitButton = form.querySelector('button[type="submit"]');
+
+            if (!title || !author || !category) {
+                showEventFormMessage('Заполните название, автора и категорию', 'error');
+                return;
+            }
+            if (!Number.isInteger(availableCopies) || availableCopies < 0) {
+                showEventFormMessage('Количество копий должно быть целым числом от 0', 'error');
+                return;
+            }
+
+            submitButton.disabled = true;
+            submitButton.textContent = 'Добавляем...';
+            showEventFormMessage('', '');
+
+            try {
+                await api('/api/events', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, description, author, category, availableCopies })
+                });
+                form.reset();
+                document.getElementById('event-copies').value = '1';
+                showEventFormMessage('Книга добавлена в каталог', 'success');
+                await loadEvents();
+            } catch (error) {
+                showEventFormMessage(error.message || 'Не удалось добавить книгу в каталог', 'error');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Добавить книгу';
+            }
+        }
+
         async function incView(id, el) {
             const count = await api(`/api/events/${id}/views`, { method: 'POST' });
             el.textContent = count;
         }
 
         async function deleteEvent(id) {
-            if (!confirm('Удалить событие?')) return;
+            if (!confirm('Удалить книгу из каталога?')) return;
             await api(`/api/events/${id}`, { method: 'DELETE' });
             loadEvents();
         }
 
         // --- ORDERS ---
+        const ORDER_STATUS_LABELS = {
+            PENDING: 'Запрошена',
+            CONFIRMED: 'Выдана',
+            COMPLETED: 'Возвращена',
+            CANCELLED: 'Отменена'
+        };
+
+        function showOrderFormMessage(text, type) {
+            const message = document.getElementById('order-form-message');
+            message.textContent = text;
+            message.className = `form-message ${type || ''}`;
+        }
+
+        function selectedBookCopies() {
+            const select = document.getElementById('order-event');
+            const option = select.options[select.selectedIndex];
+            if (!option) return null;
+            return Number(option.dataset.copies);
+        }
+
+        function updateOrderAvailability() {
+            const copies = selectedBookCopies();
+            const submit = document.getElementById('order-submit');
+            if (copies === null) {
+                submit.disabled = true;
+                showOrderFormMessage('В каталоге нет ни одной книги', 'error');
+                return;
+            }
+            if (copies <= 0) {
+                submit.disabled = true;
+                showOrderFormMessage('Копий книги больше нет', 'error');
+                return;
+            }
+            submit.disabled = false;
+            showOrderFormMessage(`Доступно копий: ${copies}`, 'success');
+        }
+
         async function loadOrders() {
-            const [orders, evts, mgrs] = await Promise.all([
+            const [orders, evts] = await Promise.all([
                 api('/api/orders'),
-                api('/api/events'),
-                api('/api/managers')
+                api('/api/events')
             ]);
             eventsCache = evts;
-            managersCache = mgrs;
 
-            const sel1 = document.getElementById('order-event');
-            sel1.innerHTML = evts.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join('');
-            const sel2 = document.getElementById('order-manager');
-            sel2.innerHTML = mgrs.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
-            document.getElementById('order-form').style.display = mgrs.length ? 'flex' : 'none';
+            const sel = document.getElementById('order-event');
+            sel.innerHTML = evts.map(e => `
+                <option value="${e.id}" data-copies="${e.availableCopies}">
+                    ${esc(e.title)}${e.availableCopies > 0 ? '' : ' — нет копий'}
+                </option>
+            `).join('');
+            document.getElementById('order-form').style.display = evts.length ? 'flex' : 'none';
+            updateOrderAvailability();
 
             const tbody = document.getElementById('orders-body');
-            const statusBadge = s => `<span class="badge badge-${s.toLowerCase()}">${s}</span>`;
+            const statusBadge = s => `<span class="badge badge-${s.toLowerCase()}">${ORDER_STATUS_LABELS[s] || s}</span>`;
             const evTitle = id => { const e = evts.find(x => x.id === id); return e ? esc(e.title) : id.slice(0,8); };
-            const mName = id => { const m = mgrs.find(x => x.id === id); return m ? esc(m.name) : id.slice(0,8); };
 
-            if (!orders.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Нет заказов</td></tr>'; return; }
+            if (!orders.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Событий пока нет</td></tr>'; return; }
             tbody.innerHTML = orders.map(o => `
                 <tr>
                     <td><small>${o.id.slice(0,8)}</small></td>
                     <td>${evTitle(o.eventId)}</td>
                     <td>${esc(o.userId)}</td>
-                    <td>${mName(o.managerId)}</td>
                     <td>${statusBadge(o.status)}</td>
                     <td class="actions">
                         ${o.status === 'PENDING' ? `
-                            <button class="btn btn-success btn-sm" onclick="updateOrder('${o.id}','CONFIRMED')">Подтвердить</button>
+                            <button class="btn btn-success btn-sm" onclick="updateOrder('${o.id}','CONFIRMED')">Выдать</button>
                             <button class="btn btn-danger btn-sm" onclick="updateOrder('${o.id}','CANCELLED')">Отменить</button>
                         ` : o.status === 'CONFIRMED' ? `
-                            <button class="btn btn-primary btn-sm" onclick="updateOrder('${o.id}','COMPLETED')">Завершить</button>
+                            <button class="btn btn-primary btn-sm" onclick="updateOrder('${o.id}','COMPLETED')">Вернуть</button>
                         ` : ''}
                     </td>
                 </tr>
@@ -325,20 +661,37 @@
         }
 
         async function createOrder() {
-            const eventId = document.getElementById('order-event').value;
-            const userId = document.getElementById('order-user').value;
-            const managerId = document.getElementById('order-manager').value;
-            if (!eventId || !userId || !managerId) { alert('Заполните все поля'); return; }
-            await api(`/api/orders?managerId=${managerId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ eventId, userId })
-            });
+            const select = document.getElementById('order-event');
+            const eventId = select.value;
+            if (!eventId) { showOrderFormMessage('Выберите книгу', 'error'); return; }
+            if (selectedBookCopies() <= 0) {
+                showOrderFormMessage('Копий книги больше нет', 'error');
+                return;
+            }
+            try {
+                await api('/api/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ eventId })
+                });
+            } catch (error) {
+                if (error.status === 409) {
+                    showOrderFormMessage('Копий книги больше нет', 'error');
+                } else {
+                    showOrderFormMessage(error.message || 'Не удалось оформить событие', 'error');
+                }
+                return;
+            }
             loadOrders();
         }
 
         async function updateOrder(id, status) {
-            await api(`/api/orders/${id}/status?status=${status}`, { method: 'PUT' });
+            try {
+                await api(`/api/orders/${id}/status?status=${status}`, { method: 'PUT' });
+            } catch (error) {
+                showOrderFormMessage(error.message || 'Не удалось изменить статус события', 'error');
+                return;
+            }
             loadOrders();
         }
 
@@ -411,10 +764,9 @@
 
         async function createTempRequest() {
             const eventId = document.getElementById('temp-event').value;
-            const userId = document.getElementById('temp-user').value;
             const ttl = document.getElementById('temp-ttl').value;
-            if (!eventId || !userId) { alert('Заполните все поля'); return; }
-            await api(`/api/temp-requests?eventId=${eventId}&userId=${userId}&purpose=reservation&ttlSeconds=${ttl}`, {
+            if (!eventId) { alert('Заполните все поля'); return; }
+            await api(`/api/temp-requests?eventId=${eventId}&purpose=reservation&ttlSeconds=${ttl}`, {
                 method: 'POST'
             });
             loadTempRequests();
@@ -425,65 +777,50 @@
             loadTempRequests();
         }
 
-        // --- MANAGERS ---
-        async function loadManagers() {
-            managersCache = await api('/api/managers');
-            document.getElementById('manager-form').style.display = 'flex';
-            const tbody = document.getElementById('managers-body');
-            if (!managersCache.length) { tbody.innerHTML = '<tr><td colspan="3" class="empty">Нет менеджеров</td></tr>'; return; }
-            tbody.innerHTML = managersCache.map(m => `
-                <tr>
-                    <td>${esc(m.name)}</td>
-                    <td>${esc(m.email)}</td>
-                    <td>${m.active ? 'Да' : 'Нет'}</td>
-                </tr>
-            `).join('');
-        }
-
-        async function createManager() {
-            const name = document.getElementById('mgr-name').value;
-            const email = document.getElementById('mgr-email').value;
-            if (!name || !email) { alert('Заполните все поля'); return; }
-            await api('/api/managers', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email })
-            });
-            document.getElementById('mgr-name').value = '';
-            document.getElementById('mgr-email').value = '';
-            loadManagers();
-        }
-
         // --- SETTINGS ---
         async function loadSettings() {
-            const userId = document.getElementById('set-user').value;
-            if (!userId) return;
+            if (!currentUser) return;
+            const userId = currentUser.userId;
             const s = await api(`/api/settings/${userId}`);
             document.getElementById('set-cat').value = s.preferredCategory || '';
             document.getElementById('set-lang').value = s.language || '';
             document.getElementById('set-notif').value = s.notificationsEnabled;
             document.getElementById('set-perpage').value = s.maxResultsPerPage;
+            document.getElementById('set-theme').value = s.theme || 'LIGHT';
             document.getElementById('settings-fields').style.display = 'flex';
         }
 
         async function saveSettings() {
-            const userId = document.getElementById('set-user').value;
-            await api(`/api/settings/${userId}`, {
+            if (!currentUser) return;
+            const userId = currentUser.userId;
+            const theme = document.getElementById('set-theme').value;
+            const saved = await api(`/api/settings/${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     preferredCategory: document.getElementById('set-cat').value,
                     language: document.getElementById('set-lang').value,
                     notificationsEnabled: document.getElementById('set-notif').value === 'true',
-                    maxResultsPerPage: parseInt(document.getElementById('set-perpage').value) || 20
+                    maxResultsPerPage: parseInt(document.getElementById('set-perpage').value) || 20,
+                    theme
                 })
             });
+            applyTheme(saved.theme);
+            sessionStorage.setItem(THEME_STORAGE_KEY, saved.theme);
             loadSettings();
         }
 
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-        loadEvents();
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('event-form');
+            form.addEventListener('submit', event => {
+                event.preventDefault();
+                createEvent();
+            });
+        });
+
+        restoreSession();
     </script>
 </body>
 </html>

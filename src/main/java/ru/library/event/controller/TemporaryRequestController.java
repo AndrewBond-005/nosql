@@ -2,6 +2,7 @@ package ru.library.event.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import ru.library.event.model.TemporaryRequest;
 import ru.library.event.service.OrderService;
@@ -23,10 +24,10 @@ public class TemporaryRequestController {
     @PostMapping
     public ResponseEntity<TemporaryRequest> createTemporaryRequest(
             @RequestParam String eventId,
-            @RequestParam String userId,
             @RequestParam(defaultValue = "reservation") String purpose,
-            @RequestParam(defaultValue = "300") long ttlSeconds) {
-        TemporaryRequest request = orderService.createTemporaryRequest(eventId, userId, purpose, ttlSeconds);
+            @RequestParam(defaultValue = "300") long ttlSeconds,
+            Authentication authentication) {
+        TemporaryRequest request = orderService.createTemporaryRequest(eventId, authentication.getName(), purpose, ttlSeconds);
         return ResponseEntity.ok(request);
     }
 

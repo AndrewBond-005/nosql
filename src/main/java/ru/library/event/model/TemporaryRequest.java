@@ -30,7 +30,7 @@ public class TemporaryRequest {
 
     @JsonIgnore
     public boolean isExpired() {
-        return LocalDateTime.now().isAfter(this.expiresAt);
+        return expiresAt == null || LocalDateTime.now().isAfter(expiresAt);
     }
 
     public String getId() { return id; }

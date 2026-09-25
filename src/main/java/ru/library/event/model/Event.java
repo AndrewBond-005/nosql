@@ -1,17 +1,42 @@
 package ru.library.event.model;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Entity
+@Table(name = "events")
 public class Event {
+    @Id
+    @Column(length = 36, nullable = false, updatable = false)
     private String id;
+
+    @Column(nullable = false)
     private String title;
+
+    @Column(columnDefinition = "TEXT")
     private String description;
+
+    @Column(nullable = false)
     private String author;
+
+    @Column(nullable = false)
     private String category;
+
+    @Column(nullable = false)
     private int availableCopies;
+
+    @Column(nullable = false)
     private long viewCount;
+
+    @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(nullable = false)
     private LocalDateTime updatedAt;
 
     public Event() {

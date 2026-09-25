@@ -1,44 +1,37 @@
 package ru.library.event.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import ru.library.event.model.Manager;
-import ru.library.event.repository.KeyValueRepository;
+import ru.library.event.repository.ManagerRepository;
 
 import java.util.List;
 import java.util.Optional;
 
 @Service
 public class ManagerService {
+    private final ManagerRepository managerRepository;
 
-    private static final String MANAGER_PREFIX = "manager:";
-
-    private final KeyValueRepository<Manager> managerRepository;
-
-    @Autowired
-    public ManagerService(KeyValueRepository<Manager> managerRepository) {
+    public ManagerService(ManagerRepository managerRepository) {
         this.managerRepository = managerRepository;
     }
 
     public Manager createManager(Manager manager) {
-        managerRepository.put(MANAGER_PREFIX + manager.getId(), manager);
-        return manager;
+        return managerRepository.save(manager);
     }
 
     public Optional<Manager> getManager(String id) {
-        return managerRepository.get(MANAGER_PREFIX + id);
+        return managerRepository.findById(id);
     }
 
     public List<Manager> getAllManagers() {
-        return managerRepository.getAll(MANAGER_PREFIX);
+        return managerRepository.findAll();
     }
 
     public Manager updateManager(Manager manager) {
-        managerRepository.put(MANAGER_PREFIX + manager.getId(), manager);
-        return manager;
+        return managerRepository.save(manager);
     }
 
     public void deleteManager(String id) {
-        managerRepository.delete(MANAGER_PREFIX + id);
+        managerRepository.deleteById(id);
     }
 }
