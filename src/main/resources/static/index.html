@@ -88,10 +88,6 @@
         .form-message { flex: 1 1 100%; min-height: 16px; color: var(--muted); font-size: 12px; }
         .form-message.error { color: #e74c3c; }
         .form-message.success { color: #27ae60; }
-        .counter { font-size: 24px; font-weight: 700; color: #3498db; }
-        .counter-label { font-size: 12px; color: var(--muted); }
-        .stat-row { display: flex; gap: 24px; padding: 16px 20px; }
-        .stat { text-align: center; }
         .view-btn { cursor: pointer; color: #3498db; font-weight: 600; }
         .view-btn:hover { text-decoration: underline; }
         [hidden] { display: none !important; }
@@ -198,6 +194,7 @@
                     </thead>
                     <tbody id="events-body"></tbody>
                 </table>
+                <div id="book-details" class="form-message"></div>
             </div>
         </div>
 
@@ -519,6 +516,7 @@
                     <td>${e.availableCopies}</td>
                     <td><span class="view-btn" onclick="incView('${e.id}', this)">${e.viewCount}</span></td>
                     <td class="actions">
+                        <button class="btn btn-primary btn-sm" onclick="openBook('${e.id}')">Открыть</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteEvent('${e.id}')">Удалить</button>
                     </td>
                 </tr>
@@ -571,6 +569,22 @@
             } finally {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Добавить книгу';
+            }
+        }
+
+        async function openBook(id) {
+            const box = document.getElementById('book-details');
+            box.className = 'form-message';
+            box.textContent = 'Открываем книгу...';
+            try {
+                const e = await api(`/api/events/${id}`);
+                box.className = 'form-message success';
+                box.innerHTML = `<strong>${esc(e.title)}</strong> &mdash; ${esc(e.author)}, ${esc(e.category)}. ` +
+                    `Копий: ${e.availableCopies}, просмотров: ${e.viewCount}. ` +
+                    `<small>${esc(e.description || '')}</small>`;
+            } catch (error) {
+                box.className = 'form-message error';
+                box.textContent = error.message || 'Не удалось открыть книгу';
             }
         }
 

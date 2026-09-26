@@ -19,7 +19,6 @@
 | Данные | Хранилище |
 |---|---|
 | Книги (каталог) | PostgreSQL, таблица `events` |
-| Менеджеры | PostgreSQL, таблица `managers` |
 | События (взятия и возвраты) | PostgreSQL, таблица `orders` |
 | Настройки пользователей | PostgreSQL, таблица `user_settings` |
 | Временные заявки | Etcd, ключи `librarytemp:{uuid}` с lease TTL |
@@ -111,7 +110,7 @@ java -jar target/library-events-service-1.0.0.jar
 - PostgreSQL: `localhost:5432`
 - Etcd: `localhost:2379`
 
-Spring Boot автоматически создаст таблицы `events`, `managers`, `orders` и `user_settings` при первом подключении к PostgreSQL. При пустой базе `DataInitializer` добавит демонстрационные события. Пользователей и отдельных менеджеров нужно создавать через интерфейс: менеджером заказа всегда является авторизованный пользователь.
+Spring Boot автоматически создаст таблицы `events`, `orders`, `users` и `user_settings` при первом подключении к PostgreSQL. При пустой базе `DataInitializer` добавит демонстрационные книги. Пользователей нужно создавать через интерфейс: менеджером события всегда является авторизованный пользователь, отдельные сущности «менеджер» в проекте нет.
 
 ## Настройки подключения
 
@@ -124,7 +123,7 @@ Spring Boot автоматически создаст таблицы `events`, `
 | `SPRING_DATASOURCE_PASSWORD` | `library` |
 | `ETCD_ENDPOINTS` | `http://localhost:2379` |
 | `ETCD_NAMESPACE` | `library` |
-| `APP_MIGRATE_ETCD_DATA` | `false` |
+| `APP_CACHE_LOGGING` | `true` |
 
 PowerShell:
 
@@ -146,38 +145,13 @@ java -jar target/library-events-service-1.0.0.jar \
   --etcd.endpoints=http://localhost:2379
 ```
 
-## Перенос существующих данных из Etcd
-
-Временные заявки всегда остаются в Etcd. Для существующих событий, менеджеров, заказов, настроек и счётчиков просмотров предусмотрен отдельный одноразовый запуск:
-
-```bash
-java -jar target/library-events-service-1.0.0.jar --app.migrate-etcd-data=true
-```
-
-Миграция:
-
-- читает из Etcd префиксы `event:`, `manager:`, `order:`, `settings:` и `views:`;
-- записывает события, менеджеров, заказы и настройки в PostgreSQL;
-- переносит счётчик просмотров в поле `events.view_count`;
-- не изменяет и не удаляет временные заявки;
-- не удаляет старые ключи Etcd.
-
-Дождитесь сообщения:
-
-```text
-Legacy Etcd data migration to PostgreSQL completed
-```
-
-После этого остановите приложение и запустите его обычной командой без флага миграции.
-
 ## Проверка данных
 
 ### PostgreSQL
 
 ```bash
 docker compose exec postgres psql -U library -d library -c "SELECT id, title, available_copies, view_count FROM events;"
-docker compose exec postgres psql -U library -d library -c "SELECT id, name, email FROM managers;"
-docker compose exec postgres psql -U library -d library -c "SELECT id, event_id, user_id, status FROM orders;"
+docker compose exec postgres psql -U library -d library -c "SELECT id, event_id, user_id, status, issued_at, returned_at FROM orders;"
 docker compose exec postgres psql -U library -d library -c "SELECT * FROM user_settings;"
 ```
 
@@ -250,6 +224,62 @@ curl http://localhost:8081/api/settings/user01/theme \
 ```
 
 Тема хранится в профиле пользователя и отдаётся из кэша `userThemes`, поэтому повторный запрос не обращается к PostgreSQL.
+
+### Как увидеть, что кэш работает
+
+В `target/app.log` каждая операция с кэшем пишется одной строкой: `CACHE MISS`, `CACHE HIT`, `CACHE PUT`, `CACHE EVICT`, `CACHE CLEAR`. Выполните запрос дважды и сравните:
+
+```bash
+curl http://localhost:8081/api/events/EVENT_ID -H "Authorization: Basic BASE64_USER01_PASSWORD"
+curl http://localhost:8081/api/events/EVENT_ID -H "Authorization: Basic BASE64_USER01_PASSWORD"
+```
+
+Первый запрос даёт `CACHE MISS` и `CACHE PUT`, второй — `CACHE HIT` без обращения к PostgreSQL. После бронирования или возврата копии в логе появляется `CACHE EVICT`, и следующий запрос снова читает базу. Отключить логи можно флагом `--app.cache-logging=false`.
+
+### Демонстрация на защите
+
+Откройте лог во втором окне PowerShell, чтобы видеть операции с кэшем в момент кликов:
+
+```bash
+Get-Content target\app.log -Wait -Encoding UTF8 | Select-String "CACHE |Button |Theme |Catalog read|Book created"
+```
+
+Дальше работайте в браузере на `http://localhost:8081`. Каждое действие пользователя даёт строку в логе:
+
+| Действие в интерфейсе | Что появится в логе |
+|---|---|
+| Вход и загрузка страницы | `CACHE MISS` + `CACHE PUT` по `userThemes` при первом входе, дальше `CACHE HIT` |
+| «Обновить» в каталоге | `Catalog read from PostgreSQL, the list is not cached: size=N` |
+| «Добавить книгу» | `Book created in PostgreSQL, cache events has no entry for the new key: eventId=...` |
+| «Открыть» у книги, первый раз | `CACHE MISS cache=events` + `CACHE PUT` |
+| «Открыть» у той же книги, второй раз | `CACHE HIT cache=events` — база не запрашивалась |
+| Клик по счётчику просмотров | `CACHE EVICT cache=events` |
+| «Оформить» | `availableCopies decremented...` + `CACHE EVICT cache=events` + `Button 'Take the book' applied: orderId=...` |
+| «Открыть» после брони | `CACHE MISS` + `CACHE PUT`, в карточке `Копий: 0` — кэш не отдал устаревшее значение |
+| «Выдать» | `Button 'CONFIRMED' applied: orderId=..., PENDING -> CONFIRMED, ... cache events stays valid` — копии не менялись, поэтому кэш не трогаем |
+| «Вернуть» | `availableCopies incremented...` + `CACHE EVICT cache=events` + `Button 'Return the book' applied: ... status=COMPLETED` |
+| «Открыть» после возврата | `CACHE MISS` + `CACHE PUT`, в карточке `Копий: 1` |
+| «Тёмная тема» в шапке | `CACHE EVICT cache=userSettings` + `CACHE PUT cache=userThemes value=DARK` |
+| Перезагрузка страницы | `CACHE HIT cache=userThemes value=DARK` |
+| «Удалить» книгу | `CACHE EVICT cache=events` |
+
+Главная мысль демонстрации: попадание в кэш видно по `CACHE HIT` без обращения к базе, а любое изменение в PostgreSQL сразу вытесняет запись, поэтому устаревшее значение показать невозможно.
+
+Тот же сценарий можно прогнать автоматически без браузера:
+
+```bash
+powershell -ExecutionPolicy Bypass -File demo-cache.ps1
+```
+
+Дополнительный аргумент — показать, что при попадании в кэш запрос в базу не уходит:
+
+```bash
+java -jar target/library-events-service-1.0.0.jar --spring.jpa.show-sql=true
+```
+
+Первый запрос сопровождается `Hibernate: select ... from events`, второй идёт без SQL, вместо него в логе только `CACHE HIT`.
+
+Останавливать PostgreSQL во время демонстрации не нужно: при каждом запросе HTTP Basic-аутентификация читает пользователя из `users`, поэтому запросы всё равно обращаются к базе, даже когда данные книги отдаются из кэша.
 
 ## Остановка
 

@@ -42,7 +42,7 @@ public class UserSettingsService {
     @Cacheable(value = "userThemes", key = "#userId")
     public UserSettings.Theme getTheme(String userId) {
         UserSettings.Theme theme = getOrCreateDefault(userId).getTheme();
-        log.info("Preferred theme read from PostgreSQL and cached: userId={}, theme={}", userId, theme);
+        log.info("Theme value read from PostgreSQL and stored into cache userThemes: userId={}, theme={}", userId, theme);
         return theme;
     }
 
@@ -52,7 +52,7 @@ public class UserSettingsService {
         settings.setTheme(theme);
         settingsRepository.save(settings);
         evict("userSettings", userId);
-        log.info("Preferred theme saved and cached: userId={}, theme={}", userId, settings.getTheme());
+        log.info("Theme saved in PostgreSQL and put into cache userThemes: userId={}, theme={}", userId, settings.getTheme());
         return settings.getTheme();
     }
 

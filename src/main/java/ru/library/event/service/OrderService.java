@@ -46,7 +46,7 @@ public class OrderService {
         }
 
         Order order = orderRepository.save(new Order(eventId, userId, userId));
-        log.info("Order created: id={}, eventId={}, userId={}, managerId={}",
+        log.info("Button 'Take the book' applied: orderId={}, eventId={}, userId={}, managerId={}",
                 order.getId(), eventId, userId, userId);
         return order;
     }
@@ -90,10 +90,12 @@ public class OrderService {
             order.setIssuedAt(LocalDateTime.now());
         }
 
+        Order.Status previousStatus = order.getStatus();
         order.setStatus(status);
         order.setUpdatedAt(LocalDateTime.now());
         Order updated = orderRepository.save(order);
-        log.info("Order status updated: orderId={}, status={}", orderId, status);
+        log.info("Button '{}' applied: orderId={}, {} -> {}, availableCopies of the book is not changed, " +
+                        "cache events stays valid", status, orderId, previousStatus, status);
         return updated;
     }
 
@@ -118,7 +120,8 @@ public class OrderService {
         order.setReturnedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         Order updated = orderRepository.save(order);
-        log.info("Book returned: orderId={}, eventId={}, userId={}", orderId, order.getEventId(), userId);
+        log.info("Button 'Return the book' applied: orderId={}, eventId={}, userId={}, status=COMPLETED",
+                orderId, order.getEventId(), userId);
         return updated;
     }
 
@@ -138,10 +141,6 @@ public class OrderService {
         log.info("Temporary request created: id={}, eventId={}, userId={}, ttl={}s",
                 request.getId(), eventId, userId, effectiveTtl);
         return request;
-    }
-
-    public TemporaryRequest createTemporaryRequest(String eventId, String userId, String purpose) {
-        return createTemporaryRequest(eventId, userId, purpose, DEFAULT_TEMP_TTL_SECONDS);
     }
 
     public Optional<TemporaryRequest> getTemporaryRequest(String id) {

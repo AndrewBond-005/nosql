@@ -1,5 +1,7 @@
 package ru.library.event.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -15,6 +17,8 @@ import java.util.Optional;
 
 @Service
 public class EventService {
+    private static final Logger log = LoggerFactory.getLogger(EventService.class);
+
     private final EventRepository eventRepository;
 
     public EventService(EventRepository eventRepository) {
@@ -24,7 +28,9 @@ public class EventService {
     public Event createEvent(Event event) {
         event.setCreatedAt(LocalDateTime.now());
         event.setUpdatedAt(LocalDateTime.now());
-        return eventRepository.save(event);
+        Event saved = eventRepository.save(event);
+        log.info("Book created in PostgreSQL, cache events has no entry for the new key: eventId={}", saved.getId());
+        return saved;
     }
 
     @Cacheable(value = "events", key = "#id")
@@ -33,7 +39,9 @@ public class EventService {
     }
 
     public List<Event> getAllEvents() {
-        return eventRepository.findAll();
+        List<Event> events = eventRepository.findAll();
+        log.info("Catalog read from PostgreSQL, the list is not cached: size={}", events.size());
+        return events;
     }
 
     @CachePut(value = "events", key = "#event.id")
@@ -68,13 +76,19 @@ public class EventService {
     @CacheEvict(value = "events", key = "#eventId")
     @Transactional
     public int reserveOneCopy(String eventId) {
-        return eventRepository.reserveOneCopy(eventId);
+        int updated = eventRepository.reserveOneCopy(eventId);
+        log.info("availableCopies decremented in PostgreSQL and evicted from cache events: eventId={}, updated={}",
+                eventId, updated);
+        return updated;
     }
 
     @CacheEvict(value = "events", key = "#eventId")
     @Transactional
     public int releaseOneCopy(String eventId) {
-        return eventRepository.releaseOneCopy(eventId);
+        int updated = eventRepository.releaseOneCopy(eventId);
+        log.info("availableCopies incremented in PostgreSQL and evicted from cache events: eventId={}, updated={}",
+                eventId, updated);
+        return updated;
     }
 
     public List<Event> getEventsByCategory(String category) {

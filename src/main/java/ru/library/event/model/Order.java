@@ -65,7 +65,6 @@ public class Order {
     public void setEventId(String eventId) { this.eventId = eventId; }
 
     public String getManagerId() { return managerId; }
-    public void setManagerId(String managerId) { this.managerId = managerId; }
 
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
